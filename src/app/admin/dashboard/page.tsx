@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
-interface ScheduleState {
+export interface ScheduleState {
     fajr: string;
     zuhr: string;
     asr: string;
@@ -14,11 +14,17 @@ interface ScheduleState {
     jummah: string;
 }
 
-
 interface AssignedMosque {
     mosque_id: string;
     role: string;
     name: string;
+}
+
+// Database query response interface for strict typing
+interface MosqueAdminQueryResult {
+    mosque_id: string;
+    role: string;
+    mosques: { name: string } | { name: string }[] | null;
 }
 
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/;
@@ -32,6 +38,7 @@ export default function AdminDashboardPage() {
     const [assignedMosques, setAssignedMosques] = useState<AssignedMosque[]>([]);
     const [selectedMosqueId, setSelectedMosqueId] = useState<string>("");
 
+    // Explicitly typed state prevents 'never' type inference
     const [schedule, setSchedule] = useState<ScheduleState>({
         fajr: "05:00",
         zuhr: "13:30",
@@ -40,7 +47,6 @@ export default function AdminDashboardPage() {
         isha: "20:15",
         jummah: "13:30",
     });
-
 
     const [validationErrors, setValidationErrors] = useState<Partial<Record<keyof ScheduleState, string>>>({});
     const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -57,7 +63,7 @@ export default function AdminDashboardPage() {
 
             setUser(session.user);
 
-            // Verify assignment in mosque_admins joined with mosques table
+            // Fetch admin entries with explicit type casting
             const { data: adminEntries, error: adminErr } = await supabase
                 .from("mosque_admins")
                 .select("mosque_id, role, mosques(name)")
@@ -72,11 +78,23 @@ export default function AdminDashboardPage() {
                 return;
             }
 
-            const formattedMosques: AssignedMosque[] = adminEntries.map((item: any) => ({
-                mosque_id: item.mosque_id,
-                role: item.role,
-                name: item.mosques?.name || "Unknown Mosque",
-            }));
+            const rawEntries = adminEntries as unknown as MosqueAdminQueryResult[];
+
+            const formattedMosques: AssignedMosque[] = rawEntries.map((item) => {
+                let mosqueName = "Unknown Mosque";
+                if (item.mosques) {
+                    if (Array.isArray(item.mosques)) {
+                        mosqueName = item.mosques[0]?.name || "Unknown Mosque";
+                    } else {
+                        mosqueName = item.mosques.name;
+                    }
+                }
+                return {
+                    mosque_id: item.mosque_id,
+                    role: item.role,
+                    name: mosqueName,
+                };
+            });
 
             setAssignedMosques(formattedMosques);
             setSelectedMosqueId(formattedMosques[0].mosque_id);
@@ -102,15 +120,16 @@ export default function AdminDashboardPage() {
             if (error) {
                 setFeedback({ type: "error", text: "Failed to load schedule for this mosque." });
             } else if (data) {
-                // Strip seconds if present for HTML time inputs (HH:MM)
-                const formatTime = (timeStr: string) => timeStr.slice(0, 5);
+                const formatTime = (timeStr: string) => (timeStr ? timeStr.slice(0, 5) : "00:00");
+                const typedData = data as Record<keyof ScheduleState, string>;
+
                 setSchedule({
-                    fajr: formatTime(data.fajr),
-                    zuhr: formatTime(data.zuhr),
-                    asr: formatTime(data.asr),
-                    maghrib: formatTime(data.maghrib),
-                    isha: formatTime(data.isha),
-                    jummah: formatTime(data.jummah),
+                    fajr: formatTime(typedData.fajr),
+                    zuhr: formatTime(typedData.zuhr),
+                    asr: formatTime(typedData.asr),
+                    maghrib: formatTime(typedData.maghrib),
+                    isha: formatTime(typedData.isha),
+                    jummah: formatTime(typedData.jummah),
                 });
             }
 
@@ -149,20 +168,21 @@ export default function AdminDashboardPage() {
 
         setSubmitting(true);
 
-        const { error } = await supabase
-            .from("iqamah_schedules")
-            .update({
-                fajr: schedule.fajr,
-                zuhr: schedule.zuhr,
-                asr: schedule.asr,
-                maghrib: schedule.maghrib,
-                isha: schedule.isha,
-                jummah: schedule.jummah,
-                updated_at: new Date().toISOString(),
-                updated_by: user.id,
-            })
-            .eq("mosque_id", selectedMosqueId);
+        const updatePayload = {
+            fajr: schedule.fajr,
+            zuhr: schedule.zuhr,
+            asr: schedule.asr,
+            maghrib: schedule.maghrib,
+            isha: schedule.isha,
+            jummah: schedule.jummah,
+            updated_at: new Date().toISOString(),
+            updated_by: user?.id,
+        };
 
+        // Cast the table builder to 'any' so .update() accepts dynamic payloads without generated types
+        const { error } = await (supabase.from("iqamah_schedules") as any)
+            .update(updatePayload)
+            .eq("mosque_id", selectedMosqueId);
         setSubmitting(false);
 
         if (error) {
@@ -245,8 +265,8 @@ export default function AdminDashboardPage() {
                                 {assignedMosques.find((m) => m.mosque_id === selectedMosqueId)?.name}
                             </h2>
                             <span className="text-xs px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-medium">
-                Authorized Admin
-              </span>
+                                Authorized Admin
+                            </span>
                         </div>
 
                         {/* Schedule Form */}
