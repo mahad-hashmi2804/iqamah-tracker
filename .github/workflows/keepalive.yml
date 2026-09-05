@@ -1,0 +1,25 @@
+name: Supabase Free Tier Keepalive Ping
+
+on:
+  schedule:
+    # Runs every 30 mins to maintain database activity
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # Allows manual execution from GitHub UI
+
+jobs:
+  ping:
+    name: Ping Supabase REST API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send API Request
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/mosques?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          
+          echo "Supabase API Response Code: $RESPONSE"
+          
+          if [ "$RESPONSE" -ne 200 ]; then
+            echo "Failed to contact Supabase instance. Expected HTTP 200, got $RESPONSE."
+            exit 1
+          fi
