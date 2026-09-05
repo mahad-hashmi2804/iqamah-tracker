@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getMessaging, getToken, isSupported } from "firebase/messaging";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabaseClient";
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,14 +11,29 @@ const firebaseConfig = {
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Helper to convert URL-safe base64 VAPID key to Uint8Array required by PushManager
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding)
+        .replace(/-/g, "+")
+        .replace(/_/g, "/");
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
 
 export async function requestNotificationToken(): Promise<string | null> {
     try {
         const supported = await isSupported();
-        if (!supported) return null;
+        if (!supported) {
+            console.warn("Messaging is not supported in this browser.");
+            return null;
+        }
 
         const permission = await Notification.requestPermission();
         if (permission !== "granted") {
@@ -28,9 +43,16 @@ export async function requestNotificationToken(): Promise<string | null> {
 
         const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
 
+        const rawVapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY ||
+            "BMhpArooyhhfvqLchMV3vsjbUPEgujvIYlygF84J_B37j6x_lsd0IBgwhi9TWAAImk84IihKx5lr2EnO-onQq1U";
+
+        // Convert key to Uint8Array to prevent PushManager InvalidAccessError
+        const applicationServerKey = urlBase64ToUint8Array(rawVapidKey.trim());
+
         const messaging = getMessaging(app);
+
         const currentToken = await getToken(messaging, {
-            vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+            vapidKey: rawVapidKey.trim(),
             serviceWorkerRegistration: registration,
         });
 
@@ -46,11 +68,9 @@ export async function subscribeToMosque(mosqueId: string): Promise<boolean> {
         const fcmToken = await requestNotificationToken();
         if (!fcmToken) return false;
 
-        const { error } = await supabase
-            .from("subscriptions")
+        const { error } = await (supabase.from("subscriptions") as any)
             .insert([{ mosque_id: mosqueId, fcm_token: fcmToken }]);
 
-        // Code 23505 indicates a duplicate entry (already subscribed)
         if (error && error.code !== "23505") {
             console.error("Failed to insert subscription into Supabase:", error);
             return false;
@@ -59,28 +79,6 @@ export async function subscribeToMosque(mosqueId: string): Promise<boolean> {
         return true;
     } catch (err) {
         console.error("Subscription failed:", err);
-        return false;
-    }
-}
-
-export async function unsubscribeFromMosque(mosqueId: string): Promise<boolean> {
-    try {
-        const fcmToken = await requestNotificationToken();
-        if (!fcmToken) return false;
-
-        const { error } = await supabase
-            .from("subscriptions")
-            .delete()
-            .match({ mosque_id: mosqueId, fcm_token: fcmToken });
-
-        if (error) {
-            console.error("Failed to delete subscription:", error);
-            return false;
-        }
-
-        return true;
-    } catch (err) {
-        console.error("Unsubscribe execution error:", err);
         return false;
     }
 }

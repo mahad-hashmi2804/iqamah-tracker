@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { subscribeToMosque, unsubscribeFromMosque } from "@/lib/fcm";
+import { Bell, BellCheck, Check, Clock } from "lucide-react";
+import { subscribeToMosque } from "@/lib/fcm";
 
-export interface IqamahSchedule {
+interface PrayerSchedule {
     fajr: string;
     zuhr: string;
     asr: string;
@@ -17,112 +18,89 @@ interface PrayerCardProps {
     mosqueId: string;
     mosqueName: string;
     address: string;
-    schedule: IqamahSchedule;
-    isSubscribedInitial?: boolean;
+    schedule: PrayerSchedule;
 }
 
-const PRAYER_KEYS: Array<{ key: keyof IqamahSchedule; label: string }> = [
-    { key: "fajr", label: "Fajr" },
-    { key: "zuhr", label: "Zuhr" },
-    { key: "asr", label: "Asr" },
-    { key: "maghrib", label: "Maghrib" },
-    { key: "isha", label: "Isha" },
-    { key: "jummah", label: "Jummah" },
-];
+// Utility to convert "13:30:00" or "13:30" to "1:30 PM"
+function formatTo12Hour(timeStr: string): string {
+    if (!timeStr) return "--:--";
+    const [hoursStr, minutesStr] = timeStr.split(":");
+    let hours = parseInt(hoursStr, 10);
+    const minutes = minutesStr;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12;
+    return `${hours}:${minutes} ${ampm}`;
+}
 
-export default function PrayerCard({
-                                       mosqueId,
-                                       mosqueName,
-                                       address,
-                                       schedule,
-                                       isSubscribedInitial = false,
-                                   }: PrayerCardProps) {
-    const [isSubscribed, setIsSubscribed] = useState(isSubscribedInitial);
+export default function PrayerCard({ mosqueId, mosqueName, address, schedule }: PrayerCardProps) {
+    const [subscribed, setSubscribed] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-    const handleToggleSubscription = async () => {
+    const handleSubscribe = async () => {
         setLoading(true);
-        setStatusMessage(null);
-
-        if (isSubscribed) {
-            const success = await unsubscribeFromMosque(mosqueId);
-            if (success) {
-                setIsSubscribed(false);
-                setStatusMessage("Unsubscribed from push alerts.");
-            } else {
-                setStatusMessage("Failed to unsubscribe.");
-            }
-        } else {
-            const success = await subscribeToMosque(mosqueId);
-            if (success) {
-                setIsSubscribed(true);
-                setStatusMessage("Subscribed to updates!");
-            } else {
-                setStatusMessage("Failed or notifications blocked.");
-            }
+        const success = await subscribeToMosque(mosqueId);
+        if (success) {
+            setSubscribed(true);
         }
         setLoading(false);
     };
 
+    const prayers = [
+        { name: "Fajr", time: schedule?.fajr },
+        { name: "Zuhr", time: schedule?.zuhr },
+        { name: "Asr", time: schedule?.asr },
+        { name: "Maghrib", time: schedule?.maghrib },
+        { name: "Isha", time: schedule?.isha },
+        { name: "Jummah", time: schedule?.jummah },
+    ];
+
     return (
-        <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-100 shadow-xl overflow-hidden">
-            {/* Card Header */}
-            <div className="p-6 bg-slate-900 text-white flex justify-between items-start">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+            {/* Mosque Header */}
+            <div className="p-6 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/50">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-emerald-400">{mosqueName}</h2>
+                    <h3 className="text-2xl font-bold text-emerald-400">{mosqueName}</h3>
                     <p className="text-xs text-slate-400 mt-1">{address}</p>
                 </div>
+
                 <button
-                    onClick={handleToggleSubscription}
-                    disabled={loading}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                        isSubscribed
-                            ? "bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700"
-                            : "bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-sm"
+                    onClick={handleSubscribe}
+                    disabled={loading || subscribed}
+                    className={`px-5 py-2.5 rounded-full font-semibold text-xs transition duration-200 flex items-center gap-2 ${
+                        subscribed
+                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                            : "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20"
                     }`}
                 >
-                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
-                    </svg>
-                    {loading ? "Updating..." : isSubscribed ? "Subscribed" : "Notify Me"}
+                    {subscribed ? (
+                        <>
+                            <Check className="w-4 h-4" /> Subscribed
+                        </>
+                    ) : (
+                        <>
+                            <Bell className="w-4 h-4" /> {loading ? "Connecting..." : "Notify Me"}
+                        </>
+                    )}
                 </button>
             </div>
 
-            {statusMessage && (
-                <div className="bg-emerald-50 px-6 py-2 text-xs font-medium text-emerald-800 border-b border-emerald-100">
-                    {statusMessage}
-                </div>
-            )}
-
-            {/* Iqamah List */}
-            <div className="divide-y divide-slate-100">
-                {PRAYER_KEYS.map(({ key, label }) => {
-                    const timeValue = schedule[key];
-                    if (!timeValue) return null;
-
-                    return (
-                        <div
-                            key={key}
-                            className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50 transition-colors"
-                        >
-              <span className="font-semibold text-slate-700 text-sm tracking-wide">
-                {label}
-              </span>
-                            <span className="font-mono font-bold text-slate-900 text-base bg-slate-100 px-3 py-1 rounded-md">
-                {timeValue}
-              </span>
-                        </div>
-                    );
-                })}
+            {/* Prayer List */}
+            <div className="divide-y divide-slate-800/60">
+                {prayers.map((p) => (
+                    <div key={p.name} className="px-6 py-4 flex justify-between items-center hover:bg-slate-800/30 transition">
+                        <span className="font-semibold text-slate-200 text-sm">{p.name}</span>
+                        <span className="font-mono font-bold text-emerald-400 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/50 text-sm">
+              {formatTo12Hour(p.time)}
+            </span>
+                    </div>
+                ))}
             </div>
 
-            {/* Footer Meta */}
-            {schedule.updated_at && (
-                <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 text-right">
-          <span className="text-[10px] text-slate-400">
-            Last modified: {new Date(schedule.updated_at).toLocaleDateString()}
-          </span>
+            {/* Card Footer */}
+            {schedule?.updated_at && (
+                <div className="px-6 py-3 bg-slate-950/50 border-t border-slate-800/80 flex items-center justify-end text-[11px] text-slate-500 gap-1.5">
+                    <Clock className="w-3 h-3" />
+                    <span>Last modified: {new Date(schedule.updated_at).toLocaleDateString()}</span>
                 </div>
             )}
         </div>

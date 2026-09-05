@@ -1,27 +1,23 @@
-importScripts("https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js");
+importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
 
-// Initialize Firebase app in Service Worker context using Webpack/env runtime definitions or hardcoded fallback config values
 firebase.initializeApp({
-    apiKey: "YOUR_NEXT_PUBLIC_FIREBASE_API_KEY",
-    projectId: "YOUR_NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-    messagingSenderId: "YOUR_NEXT_PUBLIC_FIREBASE_SENDER_ID",
-    appId: "YOUR_NEXT_PUBLIC_FIREBASE_APP_ID",
+    apiKey: "AIzaSyBNzVCQX7SHg_Xz8rwVRuPqGHteWGLs45E",
+    authDomain: "iqamah-tracker-push.firebaseapp.com",
+    projectId: "iqamah-tracker-push",
+    storageBucket: "iqamah-tracker-push.firebasestorage.app",
+    messagingSenderId: "178942306567",
+    appId: "1:178942306567:web:923e5e6a1594457b117da2"
 });
 
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-    console.log("[firebase-messaging-sw.js] Received background message: ", payload);
-
-    const notificationTitle = payload.notification?.title || "Iqamah Schedule Update";
+    console.log('[firebase-messaging-sw.js] Received background message ', payload);
+    const notificationTitle = payload.notification.title || 'Iqamah Update';
     const notificationOptions = {
-        body: payload.notification?.body || "Iqamah times have been updated.",
-        icon: "/icons/icon-192x192.png",
-        badge: "/icons/icon-192x192.png",
-        tag: "iqamah-update-alert",
-        renotify: true,
-        data: payload.data || {},
+        body: payload.notification.body || 'Prayer time updated.',
+        icon: '/icon.png',
     };
 
     self.registration.showNotification(notificationTitle, notificationOptions);

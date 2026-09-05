@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fix Leaflet tile background in dark mode */
+.leaflet-container {
+    background-color: #0f172a !important;
+}
