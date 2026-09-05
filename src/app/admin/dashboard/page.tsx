@@ -14,6 +14,7 @@ interface ScheduleState {
     jummah: string;
 }
 
+
 interface AssignedMosque {
     mosque_id: string;
     role: string;
@@ -32,13 +33,14 @@ export default function AdminDashboardPage() {
     const [selectedMosqueId, setSelectedMosqueId] = useState<string>("");
 
     const [schedule, setSchedule] = useState<ScheduleState>({
-        fajr: "",
-        zuhr: "",
-        asr: "",
-        maghrib: "",
-        isha: "",
-        jummah: "",
+        fajr: "05:00",
+        zuhr: "13:30",
+        asr: "17:00",
+        maghrib: "18:45",
+        isha: "20:15",
+        jummah: "13:30",
     });
+
 
     const [validationErrors, setValidationErrors] = useState<Partial<Record<keyof ScheduleState, string>>>({});
     const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
